@@ -41,6 +41,35 @@ tree \
 ncdu
 
 ########################################
+# install vim colorschemes
+########################################
+
+VIM_COLORS_DIR="$HOME/.vim/colors"
+mkdir -p "$VIM_COLORS_DIR"
+
+download_colorscheme() {
+  local name="$1"
+  local url="$2"
+  local target_file="$VIM_COLORS_DIR/$name.vim"
+
+  echo "Installing Vim colorscheme: $name"
+  curl -fsSL "$url" -o "$target_file"
+}
+
+download_colorscheme "gruvbox" "https://raw.githubusercontent.com/morhetz/gruvbox/master/colors/gruvbox.vim"
+download_colorscheme "solarized" "https://raw.githubusercontent.com/altercation/vim-colors-solarized/master/colors/solarized.vim"
+download_colorscheme "dracula" "https://raw.githubusercontent.com/dracula/vim/master/colors/dracula.vim"
+download_colorscheme "nord" "https://raw.githubusercontent.com/arcticicestudio/nord-vim/main/colors/nord.vim"
+download_colorscheme "molokai" "https://raw.githubusercontent.com/fatih/molokai-vim/main/colors/molokai.vim"
+
+cat <<'EOF' > "$HOME/.vimrc"
+syntax enable
+set t_Co=256
+set background=dark
+colorscheme gruvbox
+EOF
+
+########################################
 # set zsh as default shell
 ########################################
 

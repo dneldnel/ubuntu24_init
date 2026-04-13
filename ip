@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DOMESTIC_URL="${DOMESTIC_URL:-https://r.inews.qq.com/api/ip2city}"
+OVERSEAS_URL="${OVERSEAS_URL:-https://api.ip.sb/geoip}"
+PROXY="${PROXY:-http://127.0.0.1:7890}"
+TIMEOUT="${CURL_TIMEOUT:-8}"
+
+[[ "$PROXY" == *://* ]] || PROXY="http://$PROXY"
+
+if [[ -t 1 ]]; then
+  cyan=$'\033[1;36m'
+  yellow=$'\033[1;33m'
+  green=$'\033[1;32m'
+  dim=$'\033[2m'
+  reset=$'\033[0m'
+else
+  cyan='' yellow='' green='' dim='' reset=''
+fi
+
+line() {
+  printf '%b%s%b\n' "$dim" '────────────────────────────────────────' "$reset"
+}
+
+fetch_direct() {
+  curl -fsSL --max-time "$TIMEOUT" --noproxy '*' "$DOMESTIC_URL"
+}
+
+fetch_proxy() {
+  curl -fsSL --max-time "$TIMEOUT" -x "$PROXY" "$OVERSEAS_URL"
+}
+
+render() {
+  RAW_JSON="$2" python3 - "$1" <<'PY'
+import json, sys
+import os
+
+mode = sys.argv[1]
+data = json.loads(os.environ["RAW_JSON"])
+
+if mode == "domestic":
+    rows = [
+        ("来源", "国内直连 · 腾讯 IP2City"),
+        ("IP", data.get("ip", "-")),
+        ("地区", " / ".join(x for x in [data.get("country"), data.get("province"), data.get("city"), data.get("district")] if x) or "-"),
+        ("运营商", data.get("isp") or "-"),
+    ]
+else:
+    rows = [
+        ("来源", "国外代理 · IP.SB"),
+        ("IP", data.get("ip", "-")),
+        ("地区", " / ".join(x for x in [data.get("country"), data.get("region"), data.get("city")] if x) or "-"),
+        ("组织", data.get("organization") or data.get("isp") or "-"),
+    ]
+
+for k, v in rows:
+    print(f"{k}\t{v}")
+PY
+}
+
+print_block() {
+  local title="$1" body="$2" raw="$3"
+  local lines
+  printf '%b%s%b %s\n' "$yellow" '▶' "$reset" "$title"
+  lines="$(render "$body" "$raw")" || return 1
+  while IFS=$'\t' read -r k v; do
+    printf '  %b%s%b %s\n' "$dim" "$k:" "$reset" "$v"
+  done <<< "$lines"
+  echo
+}
+
+main() {
+  local domestic overseas
+
+  printf '%b%s%b\n' "$cyan" '公网 IP 信息' "$reset"
+  line
+
+  domestic="$(fetch_direct)"
+  print_block '第一次：国内服务（直连）' domestic "$domestic"
+
+  overseas="$(fetch_proxy)"
+  print_block "第二次：国外服务（代理 ${PROXY#*://}）" overseas "$overseas"
+
+  line
+  printf '%b%s%b\n' "$green" '完成' "$reset"
+}
+
+main "$@"
